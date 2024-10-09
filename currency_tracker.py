@@ -23,6 +23,8 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
 RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
+COMPARISON_TYPE = os.getenv("COMPARISON_TYPE", "YEAR_AVERAGE")
+CUSTOM_VALUE = float(os.getenv("CUSTOM_VALUE", 0))
 
 def get_current_rate():
     """获取当前汇率"""
@@ -50,16 +52,27 @@ def get_current_rate():
         logging.error(f"获取当前汇率时发生错误: {e}", exc_info=True)
         raise
 
-def get_average_rate():
-    """获取过去一年的平均汇率"""
+def get_comparison_rate():
+    """获取比较基准汇率"""
+    if COMPARISON_TYPE == "YEAR_AVERAGE":
+        return get_average_rate(365)
+    elif COMPARISON_TYPE == "MONTH_AVERAGE":
+        return get_average_rate(30)
+    elif COMPARISON_TYPE == "CUSTOM_VALUE":
+        return CUSTOM_VALUE
+    else:
+        raise ValueError(f"未知的比较类型: {COMPARISON_TYPE}")
+
+def get_average_rate(days):
+    """获取指定天数的平均汇率"""
     try:
-        logging.info("正在获取过去一年的平均汇率...")
+        logging.info(f"正在获取过去 {days} 天的平均汇率...")
         end_date = datetime.now()
-        start_date = end_date - timedelta(days=365)
+        start_date = end_date - timedelta(days=days)
         
         data = yf.download(CURRENCY_PAIR, start=start_date, end=end_date)
         average_rate = data['Close'].mean()
-        logging.info(f"过去一年的平均汇率: {average_rate}")
+        logging.info(f"过去 {days} 天的平均汇率: {average_rate}")
         return average_rate
     except Exception as e:
         logging.error(f"获取平均汇率时发生错误: {e}", exc_info=True)
@@ -90,15 +103,15 @@ def main():
     while True:
         try:
             current_rate = get_current_rate()
-            average_rate = get_average_rate()
+            comparison_rate = get_comparison_rate()
             
-            if current_rate < average_rate:
-                subject = "JPY/CNY 汇率低于年平均值警报"
-                body = f"当前 JPY/CNY 汇率 ({current_rate:.4f}) 低于过去一年的平均值 ({average_rate:.4f})。"
+            if current_rate < comparison_rate:
+                subject = "JPY/CNY 汇率低于基准值警报"
+                body = f"当前 JPY/CNY 汇率 ({current_rate:.4f}) 低于基准值 ({comparison_rate:.4f})。"
                 send_email(subject, body)
                 logging.info(f"已发送警报邮件: {body}")
             else:
-                logging.info(f"当前汇率 ({current_rate:.4f}) 高于或等于年平均值 ({average_rate:.4f})。")
+                logging.info(f"当前汇率 ({current_rate:.4f}) 高于或等于基准值 ({comparison_rate:.4f})。")
             
             logging.info(f"等待 {CHECK_INTERVAL} 秒后进行下一次检查...")
             time.sleep(CHECK_INTERVAL)
