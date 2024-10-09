@@ -25,6 +25,7 @@ SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
 RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
 COMPARISON_TYPE = os.getenv("COMPARISON_TYPE", "YEAR_AVERAGE")
 CUSTOM_VALUE = float(os.getenv("CUSTOM_VALUE", 0))
+CUSTOM_DAYS = int(os.getenv("CUSTOM_DAYS", 7))
 
 def get_current_rate():
     """获取当前汇率"""
@@ -60,6 +61,8 @@ def get_comparison_rate():
         return get_average_rate(30)
     elif COMPARISON_TYPE == "CUSTOM_VALUE":
         return CUSTOM_VALUE
+    elif COMPARISON_TYPE == "CUSTOM_DAYS_AVERAGE":
+        return get_average_rate(CUSTOM_DAYS)
     else:
         raise ValueError(f"未知的比较类型: {COMPARISON_TYPE}")
 
