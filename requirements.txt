@@ -1,8 +1,4 @@
-pandas
 numpy
-scikit-learn
-tensorflow
-matplotlib
 yfinance
 requests
 python-dotenv
