@@ -17,7 +17,7 @@ load_dotenv()
 
 # 配置参数
 CURRENCY_PAIR = "JPYCNY=X"
-CHECK_INTERVAL = 3600  # 每小时检查一次
+CHECK_INTERVAL = 86400  # 每天检查一次
 SMTP_SERVER = os.getenv("SMTP_SERVER")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
@@ -109,10 +109,10 @@ def main():
             comparison_rate = get_comparison_rate()
             
             if current_rate < comparison_rate:
-                subject = "JPY/CNY 汇率低于基准值警报"
+                subject = "JPY/CNY 汇率低于基准值"
                 body = f"当前 JPY/CNY 汇率 ({current_rate:.4f}) 低于基准值 ({comparison_rate:.4f})。"
                 send_email(subject, body)
-                logging.info(f"已发送警报邮件: {body}")
+                logging.info(f"已发送邮件: {body}")
             else:
                 logging.info(f"当前汇率 ({current_rate:.4f}) 高于或等于基准值 ({comparison_rate:.4f})。")
             
