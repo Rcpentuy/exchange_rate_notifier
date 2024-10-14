@@ -8,9 +8,23 @@ from datetime import datetime, timedelta
 import time
 from dotenv import load_dotenv
 import logging
+from logging.handlers import RotatingFileHandler
 
 # 设置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+log_directory = "logs"
+if not os.path.exists(log_directory):
+    os.makedirs(log_directory)
+
+log_file = os.path.join(log_directory, "currency_tracker.log")
+
+# 创建一个 RotatingFileHandler
+file_handler = RotatingFileHandler(log_file, maxBytes=1024 * 1024, backupCount=5)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
+# 配置 root logger
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[file_handler, logging.StreamHandler()])
 
 # 加载 .env 文件
 load_dotenv()
@@ -81,25 +95,38 @@ def get_average_rate(days):
         logging.error(f"获取平均汇率时发生错误: {e}", exc_info=True)
         raise
 
-def send_email(subject, body):
-    """发送电子邮件通知"""
-    try:
-        logging.info("正在发送电子邮件...")
-        message = MIMEMultipart()
-        message['From'] = SENDER_EMAIL
-        message['To'] = RECIPIENT_EMAIL
-        message['Subject'] = subject
-        
-        message.attach(MIMEText(body, 'plain'))
-        
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SENDER_EMAIL, SENDER_PASSWORD)
-            server.send_message(message)
-        logging.info("电子邮件发送成功")
-    except Exception as e:
-        logging.error(f"发送电子邮件时发生错误: {e}", exc_info=True)
-        raise
+def send_email(subject, body, max_retries=3, retry_delay=5):
+    """发送电子邮件通知，带有重试机制"""
+    for attempt in range(max_retries):
+        try:
+            logging.info(f"正在尝试发送电子邮件 (尝试 {attempt + 1}/{max_retries})...")
+            message = MIMEMultipart()
+            message['From'] = SENDER_EMAIL
+            message['To'] = RECIPIENT_EMAIL
+            message['Subject'] = subject
+            
+            message.attach(MIMEText(body, 'plain'))
+            
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
+                server.set_debuglevel(1)  # 启用调试输出
+                logging.info("正在建立 SMTP 连接...")
+                server.connect(SMTP_SERVER, SMTP_PORT)
+                logging.info("正在启动 TLS...")
+                server.starttls()
+                logging.info("正在登录...")
+                server.login(SENDER_EMAIL, SENDER_PASSWORD)
+                logging.info("正在发送邮件...")
+                server.send_message(message)
+            logging.info("电子邮件发送成功")
+            return
+        except Exception as e:
+            logging.error(f"发送电子邮件时发生错误 (尝试 {attempt + 1}/{max_retries}): {e}", exc_info=True)
+            if attempt < max_retries - 1:
+                logging.info(f"等待 {retry_delay} 秒后重试...")
+                time.sleep(retry_delay)
+            else:
+                logging.error("达到最大重试次数，无法发送电子邮件")
+                raise
 
 def main():
     logging.info("程序启动")
@@ -111,8 +138,11 @@ def main():
             if current_rate < comparison_rate:
                 subject = "JPY/CNY 汇率低于基准值"
                 body = f"当前 JPY/CNY 汇率 ({current_rate:.4f}) 低于基准值 ({comparison_rate:.4f})。"
-                send_email(subject, body)
-                logging.info(f"已发送邮件: {body}")
+                try:
+                    send_email(subject, body)
+                    logging.info(f"已发送邮件: {body}")
+                except Exception as e:
+                    logging.error(f"无法发送电子邮件: {e}")
             else:
                 logging.info(f"当前汇率 ({current_rate:.4f}) 高于或等于基准值 ({comparison_rate:.4f})。")
             
